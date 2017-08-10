@@ -80,6 +80,7 @@ def api_req_post_data(path, data, debug=False):
     jsonForRequest = json.dumps(data, default=complex_handler)
     reqQuery = urllib2.Request(path, data=jsonForRequest, headers={'Content-type': 'application/json'})
     reqQuery.add_header("Authorization", api_auth_name)
+    reqQuery.get_method = lambda: 'POST'
 
     try:
         apiAccessToken
@@ -112,6 +113,7 @@ def api_req_post(path, debug=False):
 
     reqQuery = urllib2.Request(path, data="", headers={'Content-type': 'application/json'})
     reqQuery.add_header("Authorization", api_auth_name)
+    reqQuery.get_method = lambda: 'POST'
 
     try:
         apiAccessToken
@@ -290,7 +292,7 @@ def remove_support_files(file_path):
             if len(files) == 0:
                 os.rmdir(filepath)
 
-    elif "/TV/" in file_path or "/Documentaries/" in file_path:
+    elif "/TV/" in file_path or "/Documentaries/" in file_path or "/Podcasts/Videos/" in file_path:
         filename   = ntpath.basename(file_path)
         fileext    = file_path.split(".")[-1]
         filepath   = os.path.dirname(file_path) + "/"
@@ -426,7 +428,7 @@ if not debugprint:
 else:
     debugprint = True
 
-url = 'http://stuartma.synology.me:8096'
+url = 'http://10.1.1.1:8096'
 api_user = 'Stuart'
 api_pass = ''
 api_deviceId = hashlib.sha1(url + synctype + api_user).hexdigest()[:12]
@@ -436,13 +438,25 @@ destRoot = ''
 
 if synctype == "video":
     devName = "DynPi Sync"
-    destRoot = destRoot + '/volumeUSB3/usbshare/'
+    destRoot = destRoot + '/volumeUSB3/usbshare/' # Kogi Portable
+elif synctype == "passport":
+    devName = "NxPassport Sync"
+    destRoot = destRoot + '/volumeUSB1/usbshare/Emby Media/' # My Passport
+elif synctype == "pny":
+    devName = "USB PNY Sync"
+    destRoot = destRoot + '/volumeUSB2/usbshare/' # My Passport
+elif synctype == "scandisk":
+    devName = "USB ScanDisk Sync"
+    destRoot = destRoot + '/volume1/public/PNYSync/' # My Passport
 elif synctype == "test":
     devName = "DynPi Sync Test"
     destRoot = destRoot + '/volume1/public/DynSync/'
 elif synctype == "book":
     devName = "Mobile " + synctype.title() + " Sync"
     destRoot = destRoot + '/volume1/homes/nxad/Remote Sync/BitTorrent Sync/Sync Books/'
+elif synctype == "comic":
+    devName = "Mobile " + synctype.title() + " Sync"
+    destRoot = destRoot + '/volume1/homes/nxad/Remote Sync/BitTorrent Sync/Sync Comic/'
 else:
     devName = "Mobile " + synctype.title() + " Sync"
     destRoot = destRoot + '/volume1/homes/nxad/Remote Sync/BitTorrent Sync/Sync Music/'
@@ -488,7 +502,7 @@ else:
     if debugprint:
         print "Getting sync jobs"
 
-    syncJobs = api_req_get(url + "/emby/Sync/Items/Ready?TargetId=" + api_deviceId + "&format=json")
+    syncJobs = api_req_get(url + "/emby/Sync/Items/Ready?TargetId=" + api_deviceId + "&format=json", True)
     
     precentJobNo = 0
     currentJobNo = 0
@@ -543,7 +557,7 @@ else:
                     copy_support_file(filepath + "logo.png", destpath)
                     copy_support_file(filepath + "poster.jpg", destpath)
 
-                elif "/TV/" in originalFilePath or "/Documentaries/" in originalFilePath:
+                elif "/TV/" in originalFilePath or "/Documentaries/" in originalFilePath or "/Podcasts/Videos/" in originalFilePath:
                     destpath = os.path.dirname(filePathName) + "/"
 
                     filename   = ntpath.basename(originalFilePath)

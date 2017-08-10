@@ -393,17 +393,53 @@ def post_synfiles_update(strjsonLocalItemIds):
             print " Emby has requested " + str(len(sync_data.get("ItemIdsToRemove"))) + " file(s) be delete"
 
         for ItemIdsToRemove in sync_data.get("ItemIdsToRemove"):
-                try:
-                    if debugprint:
-                        print "  " + ItemIdsToRemove + " = " + ntpath.basename(currentFiles[ItemIdsToRemove])
+            try:
+                if debugprint:
+                    print "  " + ItemIdsToRemove + " = " + ntpath.basename(currentFiles[ItemIdsToRemove])
 
-                    remove_support_files(currentFiles[ItemIdsToRemove])
-                    strjsonLocalItemIds = strjsonLocalItemIds.replace('"' + ItemIdsToRemove + '",', '').replace(',"' + ItemIdsToRemove + '"', '').replace('"' + ItemIdsToRemove + '"', '')
-                    currentFiles.pop(ItemIdsToRemove, None)
-                except:
-                    passon = True
+                remove_support_files(currentFiles[ItemIdsToRemove])
+                strjsonLocalItemIds = strjsonLocalItemIds.replace('"' + ItemIdsToRemove + '",', '').replace(',"' + ItemIdsToRemove + '"', '').replace('"' + ItemIdsToRemove + '"', '')
+                currentFiles.pop(ItemIdsToRemove, None)
+            except:
+                passon = True
         
         post_synfiles_update(strjsonLocalItemIds)
+    else:
+       text_file = open(dataFile, "w")
+       text_file.write("%s" % json.dumps(currentFiles).encode("utf-8"))
+       text_file.close()
+
+def find_tv_show(show_name, ProductionYear):
+    global all_tv_shows, apiUserId
+
+    json_tv_shows = ""
+    if all_tv_shows == "":
+        json_tv_shows = api_req_get(url + "/Users/" + apiUserId + "/Items?SortBy=SortName&SortOrder=Ascending&IncludeItemTypes=Series&Recursive=true&Fields=PrimaryImageAspectRatio%2CSortName&format=json")
+        all_tv_shows = json_tv_shows.get("Items")
+
+    for show in all_tv_shows:
+        if ProductionYear > 0 and show['Name'].encode('utf-8').strip() == show_name.encode('utf-8').strip() and show['ProductionYear'] == ProductionYear:
+            return show
+        elif ProductionYear == 0 and show['Name'].encode('utf-8').strip() == show_name.encode('utf-8').strip():
+            return show
+
+    return show_name + " - Not Found"
+
+def find_movie(show_name, ProductionYear):
+    global all_movies, apiUserId
+
+    json_tv_shows = ""
+    if all_movies == "":
+        json_tv_shows = api_req_get(url + "/Users/" + apiUserId + "/Items?SortBy=SortName&SortOrder=Ascending&IncludeItemTypes=Movie&Recursive=true&Fields=PrimaryImageAspectRatio%2CSortName&format=json")
+        all_movies = json_tv_shows.get("Items")
+
+    for show in all_movies:
+        if ProductionYear > 0 and show['Name'].encode('utf-8').strip() == show_name.encode('utf-8').strip() and show['ProductionYear'] == ProductionYear:
+            return show
+        elif ProductionYear == 0 and show['Name'].encode('utf-8').strip() == show_name.encode('utf-8').strip():
+            return show
+
+    return show_name + " - Not Found"
 
 parser = argparse.ArgumentParser(description='Query XBMC database')
 parser.add_argument('--user', dest='user', help='Title of the movie')
@@ -429,11 +465,14 @@ else:
     debugprint = True
 
 url = 'http://10.1.1.1:8096'
+all_tv_shows = ''
+all_movies = ''
+all_collection = ''
 api_user = 'Stuart'
 api_pass = ''
 api_deviceId = hashlib.sha1(url + synctype + api_user).hexdigest()[:12]
 
-destSrc = '/volume2/MediaFiles/'
+destSrc = '/media/MediaLibrary/'
 destRoot = ''
 
 if synctype == "video":
@@ -469,6 +508,7 @@ else:
         print "Starting synchronizer"
         
     dataFile = destRoot + "data.json"
+    jobsFile = destRoot + "jobs.json"
     # Authenticate with the API
     api_auth_name = "MediaBrowser Client=NxFIFTEEN Emby Sync, Device=" + devName + ", DeviceId=" + api_deviceId + ", Version=0.0.0.1"
     authenticate_api()
@@ -477,7 +517,7 @@ else:
         print "Pushing client options"
         
     jsonPayload = '{"PlayableMediaTypes":["Audio","Video"],"SupportsPersistentIdentifier":true,"SupportsMediaControl":false,"SupportsOfflineAccess":true,"SupportsSync":true,"SupportsContentUploading":false,"DeviceProfile":{"MaxStreamingBitrate":176551724,"MaxStaticBitrate":100000000,"MusicStreamingTranscodingBitrate":192000,"DirectPlayProfiles":[{"Container":"mp4,m4v","Type":"Video","VideoCodec":"h264","AudioCodec":"mp3,aac"},{"Container":"mkv","Type":"Video","VideoCodec":"h264","AudioCodec":"mp3,aac"},{"Container":"mov","Type":"Video","VideoCodec":"h264","AudioCodec":"mp3,aac"},{"Container":"opus","Type":"Audio"},{"Container":"mp3","Type":"Audio"},{"Container":"aac","Type":"Audio"},{"Container":"m4a","AudioCodec":"aac","Type":"Audio"},{"Container":"webma,webm","Type":"Audio"},{"Container":"wav","Type":"Audio"},{"Container":"webm","Type":"Video"},{"Container":"m4v,3gp,ts,mpegts,mov,xvid,vob,mkv,wmv,asf,ogm,ogv,m2v,avi,mpg,mpeg,mp4,webm,wtv","Type":"Video","AudioCodec":"aac,aac_latm,mp2,mp3,ac3,wma,dca,dts,pcm,PCM_S16LE,PCM_S24LE,opus,flac"},{"Container":"aac,mp3,mpa,wav,wma,mp2,ogg,oga,webma,ape,opus,flac,m4a","Type":"Audio"}],"TranscodingProfiles":[{"Container":"opus","Type":"Audio","AudioCodec":"opus","Context":"Streaming","Protocol":"http","MaxAudioChannels":"2"},{"Container":"opus","Type":"Audio","AudioCodec":"opus","Context":"Static","Protocol":"http","MaxAudioChannels":"2"},{"Container":"mp3","Type":"Audio","AudioCodec":"mp3","Context":"Streaming","Protocol":"http","MaxAudioChannels":"2"},{"Container":"mp3","Type":"Audio","AudioCodec":"mp3","Context":"Static","Protocol":"http","MaxAudioChannels":"2"},{"Container":"aac","Type":"Audio","AudioCodec":"aac","Context":"Streaming","Protocol":"http","MaxAudioChannels":"2"},{"Container":"aac","Type":"Audio","AudioCodec":"aac","Context":"Static","Protocol":"http","MaxAudioChannels":"2"},{"Container":"wav","Type":"Audio","AudioCodec":"wav","Context":"Streaming","Protocol":"http","MaxAudioChannels":"2"},{"Container":"wav","Type":"Audio","AudioCodec":"wav","Context":"Static","Protocol":"http","MaxAudioChannels":"2"},{"Container":"mkv","Type":"Video","AudioCodec":"mp3,aac,ac3","VideoCodec":"h264","Context":"Streaming","MaxAudioChannels":"2","CopyTimestamps":false},{"Container":"ts","Type":"Video","AudioCodec":"aac,mp3,ac3","VideoCodec":"h264","Context":"Streaming","Protocol":"hls","MaxAudioChannels":"2","EnableSplittingOnNonKeyFrames":false},{"Container":"webm","Type":"Video","AudioCodec":"vorbis","VideoCodec":"vpx","Context":"Streaming","Protocol":"http","MaxAudioChannels":"2"},{"Container":"mp4","Type":"Video","AudioCodec":"mp3,aac,ac3","VideoCodec":"h264","Context":"Streaming","Protocol":"http","MaxAudioChannels":"2"},{"Container":"mp4","Type":"Video","AudioCodec":"mp3,aac,ac3","VideoCodec":"h264","Context":"Static","Protocol":"http"}],"ContainerProfiles":[],"CodecProfiles":[{"Type":"Video","Container":"avi","Conditions":[{"Condition":"NotEqual","Property":"CodecTag","Value":"xvid"}]},{"Type":"Video","Codec":"h264","Conditions":[{"Condition":"EqualsAny","Property":"VideoProfile","Value":"high|main|baseline|constrained baseline"},{"Condition":"LessThanEqual","Property":"VideoLevel","Value":"41"}]},{"Type":"Audio","Conditions":[{"Condition":"LessThanEqual","Property":"AudioChannels","Value":"2"}]}],"SubtitleProfiles":[{"Format":"srt","Method":"External"},{"Format":"ssa","Method":"External"},{"Format":"ass","Method":"External"},{"Format":"srt","Method":"Embed"},{"Format":"subrip","Method":"Embed"},{"Format":"ass","Method":"Embed"},{"Format":"ssa","Method":"Embed"},{"Format":"dvb_teletext","Method":"Embed"},{"Format":"dvb_subtitle","Method":"Embed"},{"Format":"dvbsub","Method":"Embed"},{"Format":"pgs","Method":"Embed"},{"Format":"pgssub","Method":"Embed"},{"Format":"dvdsub","Method":"Embed"},{"Format":"vtt","Method":"Embed"},{"Format":"sub","Method":"Embed"},{"Format":"idx","Method":"Embed"},{"Format":"smi","Method":"Embed"}],"ResponseProfiles":[{"Type":"Video","Container":"m4v","MimeType":"video/mp4"},{"Type":"Video","Container":"mov","MimeType":"video/webm"}],"MaxStaticMusicBitrate":null}}'
-    api_req_post_data(url + "/emby/Sessions/Capabilities/Full?format=json", json.loads(jsonPayload))
+    api_req_post_data(url + "/emby/Sessions/Capabilities/Full", json.loads(jsonPayload))
 
     if debugprint:
         print "Reading from local cache"
@@ -500,9 +540,125 @@ else:
     post_synfiles_update(strjsonLocalItemIds)
 
     if debugprint:
-        print "Getting sync jobs"
+        print "Updating sync jobs"
 
-    syncJobs = api_req_get(url + "/emby/Sync/Items/Ready?TargetId=" + api_deviceId + "&format=json", True)
+    syncJobs = json.loads("{}")
+    if os.path.isfile(jobsFile):
+        with open(jobsFile) as data_file:
+            syncJobs = json.load(data_file)
+
+    missingJob = False
+    expectedJobs = []
+    jsonSyncJobs = {}
+    for key in syncJobs:
+        if 'Id' in syncJobs.get(key):
+            expectedJobs.append(syncJobs.get(key).get("Id"))
+            jsonItemId = syncJobs.get(key).get("Id")
+        else:
+            if syncJobs.get(key).get("Type") == "Show":
+                # Download/Search for the TV show
+                if 'Year' not in syncJobs.get(key):
+                    SearchProductionYear = 0
+                else:
+                    SearchProductionYear = syncJobs.get(key).get("Year")            
+                
+                target_tvshow = find_tv_show(syncJobs.get(key).get("Name"), SearchProductionYear)
+                if isinstance(target_tvshow, basestring):
+                    # Check TV show was found, if not a string error message is returned
+                    print target_tvshow
+                    missingJob = True
+                else:
+                    #print target_tvshow.get("Id").encode('utf-8') + " -> " + syncJobs.get(key).get("Name").encode('utf-8')
+                    expectedJobs.append(target_tvshow.get("Id"))
+                    jsonItemId = target_tvshow.get("Id")
+            elif syncJobs.get(key).get("Type") == "Movie":
+                # Download/Search for the TV show
+                if 'Year' not in syncJobs.get(key):
+                    SearchProductionYear = 0
+                else:
+                    SearchProductionYear = syncJobs.get(key).get("Year")            
+                
+                target_tvshow = find_movie(syncJobs.get(key).get("Name"), SearchProductionYear)
+                if isinstance(target_tvshow, basestring):
+                    # Check TV show was found, if not a string error message is returned
+                    print target_tvshow
+                    missingJob = True
+                else:
+                    #print target_tvshow.get("Id").encode('utf-8') + " -> " + syncJobs.get(key).get("Name").encode('utf-8')
+                    expectedJobs.append(target_tvshow.get("Id"))
+                    jsonItemId = target_tvshow.get("Id")
+                
+        if not missingJob:
+            if 'Bitrate' not in syncJobs.get(key):
+                Bitrate = ""
+            else:
+                Bitrate = syncJobs.get(key).get("Bitrate")
+                
+            if 'Quality' not in syncJobs.get(key):
+                Quality = ""
+            else:
+                Quality = syncJobs.get(key).get("Quality")
+                
+            if 'Profile' not in syncJobs.get(key):
+                Profile = ""
+            else:
+                Profile = syncJobs.get(key).get("Profile")
+                
+            if 'ItemLimit' in syncJobs.get(key):
+                ItemLimit = ', "ItemLimit":"' + str(syncJobs.get(key).get("ItemLimit")) + '"'
+            else:
+                ItemLimit = ''
+                
+            if 'SyncNewContent' not in syncJobs.get(key):
+                SyncNewContent = True
+            else:
+                if syncJobs.get(key).get("SyncNewContent") == "False":
+                    SyncNewContent = False
+                else:
+                    SyncNewContent = True
+                
+            if 'UnwatchedOnly' not in syncJobs.get(key):
+                UnwatchedOnly = True
+            else:
+                if syncJobs.get(key).get("UnwatchedOnly") == "False":
+                    UnwatchedOnly = False
+                else:
+                    UnwatchedOnly = True
+        
+            jsonItemPayload = '{"userId":"' + apiUserId + '","TargetId":"' + api_deviceId + '","Bitrate":"' + str(Bitrate) + '","Quality":"' + str(Quality) + '","Profile":"' + str(Profile) + '"' + ItemLimit + ',"SyncNewContent":"' + str(SyncNewContent) + '","UnwatchedOnly":"' + str(UnwatchedOnly) + '","ItemIds":"' + jsonItemId + '"}'
+            
+            jsonSyncJobs[jsonItemId] = jsonItemPayload
+
+    if missingJob:
+        exit()
+    
+    syncJobsRules = api_req_get(url + "/emby/Sync/Jobs?TargetId=" + api_deviceId + "&format=json")
+    totalJobsNo = len(syncJobsRules.get("Items"))
+    if totalJobsNo == 0:
+        if debugprint:
+            print "Creating TV Jobs..."
+            
+        for missingJob in expectedJobs:
+            jsonSyncData = json.loads(jsonSyncJobs[missingJob])
+            sync_data = api_req_post_data(url + "/emby/Sync/Jobs?format=json", jsonSyncData)
+
+    else:
+        missingJobs = expectedJobs
+    
+        for syncJobRule in syncJobsRules.get("Items"):
+            if syncJobRule.get("PrimaryImageItemId") in missingJobs:
+                missingJobs.remove(syncJobRule.get("PrimaryImageItemId"));
+            
+        for missingJob in missingJobs:
+            print "We're still missing " + missingJob
+            jsonSyncData = json.loads(jsonSyncJobs[missingJob])
+            print jsonSyncData
+            sync_data = api_req_post_data(url + "/emby/Sync/Jobs?format=json", jsonSyncData)
+
+    if debugprint:
+        print "Getting sync jobs"
+        
+    syncJobs = api_req_get(url + "/emby/Sync/Items/Ready?TargetId=" + api_deviceId + "&format=json")
     
     precentJobNo = 0
     currentJobNo = 0
@@ -521,7 +677,7 @@ else:
 
             if debugprint:
                 print " " + precentJobNo + "% " + str(currentJobNo) + " / " + str(totalJobNo) + " | " + syncJob.get("SyncJobName") + " - " + syncJob.get("Item").get("Name")
-                #print "  From: " + originalFilePath
+                print "  From: " + originalFilePath
 
             filePathName = destRoot + originalFilePath
             filePathName = filePathName.replace(destSrc, "")
@@ -530,12 +686,16 @@ else:
                 filePathName = filePathName.replace('Music/Albums/', 'Albums/')
                 filePathName = filePathName.replace('Music/Videos/', 'Music Videos/')
 
-            #if debugprint:
-            #    print "  To  : " + filePathName
+            if debugprint:
+                print "  To  : " + filePathName
+                
+            originalFilePath = originalFilePath.replace("/media/MediaLibrary/", "/volume2/MediaFiles/")
+            if debugprint:
+                print "  Rewritten to  : " + originalFilePath
 
             if api_req_get_download(url + "/emby/Sync/JobItems/" + syncJob.get("SyncJobItemId") + "/File", filePathName):
                 api_req_post(url + "/emby/Sync/JobItems/" + syncJob.get("SyncJobItemId") + "/Transferred")
-
+                
                 expectedFiles.append(hashlib.sha1(filePathName.encode('utf-8')).hexdigest())
                 currentFiles[originalFileId] = filePathName
 
@@ -557,7 +717,7 @@ else:
                     copy_support_file(filepath + "logo.png", destpath)
                     copy_support_file(filepath + "poster.jpg", destpath)
 
-                elif "/TV/" in originalFilePath or "/Documentaries/" in originalFilePath or "/Podcasts/Videos/" in originalFilePath:
+                elif "/TV/" in originalFilePath or "/Documentaries/" in originalFilePath or "/Podcasts/Videos/" in originalFilePath or "/YouTube TV/" in originalFilePath or "/Workout/" in originalFilePath:
                     destpath = os.path.dirname(filePathName) + "/"
 
                     filename   = ntpath.basename(originalFilePath)
@@ -602,17 +762,16 @@ else:
                 text_file.write("%s" % json.dumps(currentFiles).encode("utf-8"))
                 text_file.close()
 
-    else:
+    else:   
         if debugprint:
             print "No jobs ready for sync"
 
-
     if debugprint:
-        print "Checking for orphaned files"
+        print "Checking for orphaned files in " + destRoot
         
     for root, directories, filenames in os.walk(destRoot):
         for filename in filenames:
-            if ".stfolder" not in filename and "data.json" not in filename and ".quarantine" not in filename and "landscape.jpg" not in filename and "logo.png" not in filename and "-thumb.jpg" not in filename and ".nfo" not in filename and "poster.jpg" not in filename and "banner.jpg" not in filename and "fanart.jpg" not in filename and "tvshow.nfo" not in filename:
+            if ".stfolder" not in filename and "data.json" not in filename and "jobs.json" not in filename and ".quarantine" not in filename and "landscape.jpg" not in filename and "logo.png" not in filename and "-thumb.jpg" not in filename and ".nfo" not in filename and "poster.jpg" not in filename and "banner.jpg" not in filename and "fanart.jpg" not in filename and "tvshow.nfo" not in filename:
 
                 filehash = os.path.join(root,filename)
                 filehash = hashlib.sha1(filehash).hexdigest()
@@ -625,3 +784,4 @@ else:
 
 if debugprint:
     print "Sync " + synctype + " completed"
+

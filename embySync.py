@@ -441,6 +441,51 @@ def find_movie(show_name, ProductionYear):
 
     return show_name + " - Not Found"
 
+def find_collection(show_name, ProductionYear):
+    global all_collection, apiUserId
+
+    json_tv_shows = ""
+    if all_collection == "":
+        json_tv_shows = api_req_get(url + "/Users/" + apiUserId + "/Items?SortBy=SortName&SortOrder=Ascending&IncludeItemTypes=BoxSet&Recursive=true&Fields=PrimaryImageAspectRatio%2CSortName&format=json")
+        all_collection = json_tv_shows.get("Items")
+
+    for show in all_collection:
+        if ProductionYear > 0 and show['Name'].encode('utf-8').strip() == show_name.encode('utf-8').strip() and show['ProductionYear'] == ProductionYear:
+            return show
+        elif ProductionYear == 0 and show['Name'].encode('utf-8').strip() == show_name.encode('utf-8').strip():
+            return show
+
+    return show_name + " - Not Found"
+
+def find_album(Album, Artist):
+    global all_albums, apiUserId
+
+    json_tv_shows = ""
+    if all_albums == "":
+        json_tv_shows = api_req_get(url + "/Users/" + apiUserId + "/Items?SortBy=SortName&SortOrder=Ascending&IncludeItemTypes=MusicAlbum&Recursive=true&Fields=PrimaryImageAspectRatio%2CSortName&format=json")
+        all_albums = json_tv_shows.get("Items")
+
+    for show in all_albums:
+        if show['AlbumArtist'].encode('utf-8').strip() == Artist.encode('utf-8'):
+            if show['Name'].encode('utf-8').strip() == Album.encode('utf-8'):
+                return show
+
+    return show_name + " - Not Found"
+
+def find_artist(Artist):
+    global all_artist, apiUserId
+
+    json_tv_shows = ""
+    if all_artist == "":
+        json_tv_shows = api_req_get(url + "/Users/" + apiUserId + "/Items?SortBy=SortName&SortOrder=Ascending&IncludeItemTypes=MusicArtist&Recursive=true&Fields=PrimaryImageAspectRatio%2CSortName&format=json")
+        all_artist = json_tv_shows.get("Items")
+
+    for show in all_artist:
+        if show['Name'].encode('utf-8').strip() == Artist.encode('utf-8'):
+            return show
+
+    return show_name + " - Not Found"
+
 parser = argparse.ArgumentParser(description='Query XBMC database')
 parser.add_argument('--user', dest='user', help='Title of the movie')
 parser.add_argument('--pass', dest='password', help='Title of the movie')
@@ -468,6 +513,8 @@ url = 'http://10.1.1.1:8096'
 all_tv_shows = ''
 all_movies = ''
 all_collection = ''
+all_albums = ''
+all_artist = ''
 api_user = 'Stuart'
 api_pass = ''
 api_deviceId = hashlib.sha1(url + synctype + api_user).hexdigest()[:12]
@@ -587,6 +634,31 @@ else:
                     #print target_tvshow.get("Id").encode('utf-8') + " -> " + syncJobs.get(key).get("Name").encode('utf-8')
                     expectedJobs.append(target_tvshow.get("Id"))
                     jsonItemId = target_tvshow.get("Id")
+            elif syncJobs.get(key).get("Type") == "MusicAlbum":
+                # Download/Search for the TV show
+                Artist = syncJobs.get(key).get("Artist")
+                Album = syncJobs.get(key).get("Album")
+                
+                target_tvshow = find_album(Album, Artist)
+                if isinstance(target_tvshow, basestring):
+                    print target_tvshow
+                    missingJob = True
+                else:
+                    print target_tvshow.get("Id").encode('utf-8') + " -> " + Album.encode('utf-8')
+                    expectedJobs.append(target_tvshow.get("Id"))
+                    jsonItemId = target_tvshow.get("Id")
+            elif syncJobs.get(key).get("Type") == "MusicArtist":
+                # Download/Search for the TV show
+                Artist = syncJobs.get(key).get("Artist")
+                
+                target_tvshow = find_artist(Artist)
+                if isinstance(target_tvshow, basestring):
+                    print target_tvshow
+                    missingJob = True
+                else:
+                    print target_tvshow.get("Id").encode('utf-8') + " -> " + Artist.encode('utf-8')
+                    expectedJobs.append(target_tvshow.get("Id"))
+                    jsonItemId = target_tvshow.get("Id")
                 
         if not missingJob:
             if 'Bitrate' not in syncJobs.get(key):
@@ -652,7 +724,6 @@ else:
         for missingJob in missingJobs:
             print "We're still missing " + missingJob
             jsonSyncData = json.loads(jsonSyncJobs[missingJob])
-            print jsonSyncData
             sync_data = api_req_post_data(url + "/emby/Sync/Jobs?format=json", jsonSyncData)
 
     if debugprint:

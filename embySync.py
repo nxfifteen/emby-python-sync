@@ -292,7 +292,7 @@ def remove_support_files(file_path):
             if len(files) == 0:
                 os.rmdir(filepath)
 
-    elif "/TV/" in file_path or "/Documentaries/" in file_path or "/Podcasts/Videos/" in file_path:
+    elif "/TV/" in file_path or "/Documentaries/" in file_path or "/Podcasts/Videos/" in file_path or "/YouTube TV/" in file_path or "/Workout/" in file_path:
         filename   = ntpath.basename(file_path)
         fileext    = file_path.split(".")[-1]
         filepath   = os.path.dirname(file_path) + "/"
@@ -537,12 +537,6 @@ elif synctype == "scandisk":
 elif synctype == "test":
     devName = "DynPi Sync Test"
     destRoot = destRoot + '/volume1/public/DynSync/'
-elif synctype == "book":
-    devName = "Mobile " + synctype.title() + " Sync"
-    destRoot = destRoot + '/volume1/homes/nxad/Remote Sync/BitTorrent Sync/Sync Books/'
-elif synctype == "comic":
-    devName = "Mobile " + synctype.title() + " Sync"
-    destRoot = destRoot + '/volume1/homes/nxad/Remote Sync/BitTorrent Sync/Sync Comic/'
 else:
     devName = "Mobile " + synctype.title() + " Sync"
     destRoot = destRoot + '/volume1/homes/nxad/Remote Sync/BitTorrent Sync/Sync Music/'
@@ -567,7 +561,7 @@ else:
     api_req_post_data(url + "/emby/Sessions/Capabilities/Full", json.loads(jsonPayload))
 
     if debugprint:
-        print "Reading from local cache"
+        print "Reading from local download cache"
         
     expectedFiles = []
     strjsonLocalItemIds = ""
@@ -587,7 +581,7 @@ else:
     post_synfiles_update(strjsonLocalItemIds)
 
     if debugprint:
-        print "Updating sync jobs"
+        print "Reading from local jobs file"
 
     syncJobs = json.loads("{}")
     if os.path.isfile(jobsFile):
@@ -644,7 +638,7 @@ else:
                     print target_tvshow
                     missingJob = True
                 else:
-                    print target_tvshow.get("Id").encode('utf-8') + " -> " + Album.encode('utf-8')
+                    #print target_tvshow.get("Id").encode('utf-8') + " -> " + Album.encode('utf-8')
                     expectedJobs.append(target_tvshow.get("Id"))
                     jsonItemId = target_tvshow.get("Id")
             elif syncJobs.get(key).get("Type") == "MusicArtist":
@@ -656,7 +650,7 @@ else:
                     print target_tvshow
                     missingJob = True
                 else:
-                    print target_tvshow.get("Id").encode('utf-8') + " -> " + Artist.encode('utf-8')
+                    #print target_tvshow.get("Id").encode('utf-8') + " -> " + Artist.encode('utf-8')
                     expectedJobs.append(target_tvshow.get("Id"))
                     jsonItemId = target_tvshow.get("Id")
                 
@@ -667,7 +661,7 @@ else:
                 Bitrate = syncJobs.get(key).get("Bitrate")
                 
             if 'Quality' not in syncJobs.get(key):
-                Quality = ""
+                Quality = "original"
             else:
                 Quality = syncJobs.get(key).get("Quality")
                 
@@ -704,30 +698,58 @@ else:
     if missingJob:
         exit()
     
+    if debugprint:
+        print "Getting server sync jobs..."
+        
     syncJobsRules = api_req_get(url + "/emby/Sync/Jobs?TargetId=" + api_deviceId + "&format=json")
     totalJobsNo = len(syncJobsRules.get("Items"))
-    if totalJobsNo == 0:
+    if totalJobsNo == 0 and len(expectedJobs) == 0:
         if debugprint:
-            print "Creating TV Jobs..."
+            print "No sync jobs in config file or on server..."
+    
+    elif len(expectedJobs) == 0:
+        if debugprint:
+            print "No sync jobs in config file..."
+                
+        for syncJobRule in syncJobsRules.get("Items"):
+            print "Removing job " + syncJobRule.get("Id")
+            sync_data = api_req_delete(url + "/emby/Sync/Jobs/" + syncJobRule.get("Id"))
+
+        text_file = open(dataFile, "w")
+        text_file.write("{}")
+        text_file.close()
+        
+        expectedFiles = []
+
+    elif totalJobsNo == 0:
+        if debugprint:
+            print "Creating all sync Jobs..."
             
         for missingJob in expectedJobs:
             jsonSyncData = json.loads(jsonSyncJobs[missingJob])
             sync_data = api_req_post_data(url + "/emby/Sync/Jobs?format=json", jsonSyncData)
 
     else:
+        extraJobs = []
         missingJobs = expectedJobs
     
         for syncJobRule in syncJobsRules.get("Items"):
-            if syncJobRule.get("PrimaryImageItemId") in missingJobs:
-                missingJobs.remove(syncJobRule.get("PrimaryImageItemId"));
+            if syncJobRule.get("RequestedItemIds")[0] in missingJobs:
+                missingJobs.remove(syncJobRule.get("RequestedItemIds")[0]);
+            else:
+                extraJobs.append(syncJobRule.get("Id"));
             
         for missingJob in missingJobs:
-            print "We're still missing " + missingJob
+            print "Adding missing job " + missingJob
             jsonSyncData = json.loads(jsonSyncJobs[missingJob])
             sync_data = api_req_post_data(url + "/emby/Sync/Jobs?format=json", jsonSyncData)
+            
+        for extraJob in extraJobs:
+            print "Removing job " + extraJob
+            sync_data = api_req_delete(url + "/emby/Sync/Jobs/" + extraJob)
 
     if debugprint:
-        print "Getting sync jobs"
+        print "Refreshing server sync items..."
         
     syncJobs = api_req_get(url + "/emby/Sync/Items/Ready?TargetId=" + api_deviceId + "&format=json")
     
@@ -839,7 +861,8 @@ else:
 
     if debugprint:
         print "Checking for orphaned files in " + destRoot
-        
+    
+    allDirectories = []
     for root, directories, filenames in os.walk(destRoot):
         for filename in filenames:
             if ".stfolder" not in filename and "data.json" not in filename and "jobs.json" not in filename and ".quarantine" not in filename and "landscape.jpg" not in filename and "logo.png" not in filename and "-thumb.jpg" not in filename and ".nfo" not in filename and "poster.jpg" not in filename and "banner.jpg" not in filename and "fanart.jpg" not in filename and "tvshow.nfo" not in filename:
@@ -852,6 +875,15 @@ else:
                         print " Removing " + filename
     
                     remove_support_files(os.path.join(root,filename))
+        
+        for directorie in directories:
+            allDirectories.append(os.path.join(root,directorie))
+
+    allDirectories.sort(key=len, reverse=True)
+    for directorie in allDirectories:
+        if directorie <> destRoot + "Movies" and directorie <> destRoot + "Music" and directorie <> destRoot + "TV" and directorie <> destRoot + "YouTube TV" and directorie <> destRoot + "Music/Albums" and directorie <> destRoot + "Music/Videos":
+            if os.path.exists(directorie) and os.listdir(directorie) == []:
+                os.rmdir(directorie)
 
 if debugprint:
     print "Sync " + synctype + " completed"
